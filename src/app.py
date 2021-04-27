@@ -13,7 +13,7 @@ def index():
 
 @app.route('/search', methods=['POST'])
 def search():
-  query = request.data.decode('utf-8').lower()
+  query = request.data.decode('utf-8')
   # normalized_query = ' '.join(query.split())
   results = indexer.search_in_elastic(query=query)
   return {"res": results}

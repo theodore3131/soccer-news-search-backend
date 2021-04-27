@@ -121,6 +121,8 @@ def reindex_for_auto_completion():
   return res
 
 def auto_complete_search(query: str):
+  if query.startswith('"'):
+    query = query.replace('"', '')
   print(query)
   body = {
     "size": 0,
@@ -131,7 +133,7 @@ def auto_complete_search(query: str):
           "order": {
             "_count": "desc"
           },
-          "include":"{}(.*)".format(query),
+          "include": "{}(.*)".format(query),
           "size": 6
         }
       }
@@ -166,7 +168,7 @@ def search_in_elastic(query: str):
     query_json = {
       "multi_match": {
         "query": query,
-        "type": "phrase",
+        "type": "phrase_prefix",
         "fields": ["title", "snippet", "content"]
       }
     }
