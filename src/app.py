@@ -18,5 +18,12 @@ def search():
   results = indexer.search_in_elastic(query=query)
   return {"res": results}
 
+@app.route('/autocomplete', methods=['POST'])
+def auto_complete():
+  query = request.data.decode('utf-8').lower()
+  # normalized_query = ' '.join(query.split())
+  results = indexer.auto_complete_search(query=query)
+  return {"res": results}
+
 if __name__ == '__main__':
   app.run(debug=True)

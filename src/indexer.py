@@ -11,6 +11,8 @@ ES_CLUSTER = "http://localhost:9200/"
 # awsauth = AWS4Auth(credentials.access_key, credentials.secret_key, region, service, session_token=credentials.token)
 
 ES_INDEX = "soccer-news-verbose"
+AUTO_COMPLETE_INDEX = "autocomplete"
+
 es = Elasticsearch(ES_CLUSTER)
 # es = Elasticsearch(
 #   hosts = [{'host': host, 'port': 443}],
@@ -67,6 +69,80 @@ def load_into_elasticsearch(document_list: list):
 def add_document_into_elasticsearch(doc_id: str, document: dict):
   return es.index(index=ES_INDEX, body=document, id=doc_id)
 
+def reindex_for_auto_completion():
+  # build new index for auto completion
+  body = {
+    "settings": {
+      "max_shingle_diff" : 50,
+      "analysis": {
+        "analyzer": {
+          "suggestions": {
+            "type": "custom",
+            "tokenizer": "classic",
+            "filter": [ "my_shingle_filter", "lowercase" ]
+          }
+        },
+        "filter": {
+          "my_shingle_filter": {
+            "type": "shingle",
+            "min_shingle_size": 2,
+            "max_shingle_size": 50
+          }
+        }
+      }
+    },
+    "mappings": {
+      "properties": {
+        "title": {
+          "type": "text",
+          "fields": {
+            "suggestions": {
+              "type": "text",
+              "analyzer": "suggestions",
+              "fielddata": True
+            }
+          }
+        }
+      }
+    }
+  }
+  es.indices.create(index=AUTO_COMPLETE_INDEX, body=body)
+
+  reindex_body = {
+    "source": {
+      "index": ES_INDEX
+    },
+    "dest": {
+      "index": AUTO_COMPLETE_INDEX
+    }
+  }
+  res = es.reindex(body=reindex_body)
+  print(res)
+  return res
+
+def auto_complete_search(query: str):
+  print(query)
+  body = {
+    "size": 0,
+    "aggs":{
+      "title_suggestions":{
+        "terms":{
+          "field":"title.suggestions",
+          "order": {
+            "_count": "desc"
+          },
+          "include":"{}(.*)".format(query),
+          "size": 6
+        }
+      }
+    }
+  }
+  res = es.search(index=AUTO_COMPLETE_INDEX, body=body)
+
+  result_list = res['aggregations']['title_suggestions']['buckets']
+  suggestions_list = [res['key'] for res in result_list]
+  return suggestions_list
+
 def search_in_elastic(query: str):
   """search in the elasticsearch instance
 
@@ -109,7 +185,8 @@ def search_in_elastic(query: str):
       'address': hit['_source']['address'],
       'timestamp': hit['_source']['timestamp'],
       'snippet': hit['_source']['snippet'],
-      'image_src': hit['_source']['image']
+      'image_src': hit['_source']['image'],
+      # 'highlight': hit['_source']['highlight']['content']
     }
     result_list.append(result)
 
